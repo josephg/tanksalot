@@ -22,23 +22,35 @@ within = (a, b, dist) ->
 class Game extends atom.Game
   constructor: ->
     super()
-    @mode = 'puzzle'
 
     canvas.width = 800
     canvas.height = 600
-
     ctx.translate 400, 300
     ctx.scale 1, -1
 
+    @state = 'menu'
+
+  startGame: ->
+    @state = 'game'
+    @mode = 'puzzle'
+    @score = 0
     @tanks = []
+    @nextId = 0
+    @currentTank = null
     @reset()
 
+  endGame: ->
+    @state = 'menu'
+
   reset: (winteam) ->
-    id++ if @currentTank?.team != winteam
+    @nextId++ if @currentTank?.team != winteam
+
+    if (@mode is 'puzzle' and @nextId is 10) or (@mode is 'sp' and @nextId is 40)
+      @endGame()
 
     @currentTank =
-      team: !!(id % 2)
-      id: id++
+      team: !!(@nextId % 2)
+      id: @nextId++
       history: []
       alive: true
 
@@ -70,6 +82,8 @@ class Game extends atom.Game
     @bullets = []
 
   update: (dt) ->
+    return @updateMenu() if @state is 'menu'
+
     dt = 1/60
 
     if atom.input.pressed 'reset'
@@ -155,12 +169,15 @@ class Game extends atom.Game
       if within t, {x:0, y:0}, 15
         @reset t.team
 
+    
 
   draw: ->
-    #ctx.fillStyle = "hsl(#{@backgroundHue},54%,76%)"
+    return @drawMenu() if @state is 'menu'
+
     ctx.fillStyle = '#ccc'
     ctx.fillRect -400, -300, 800, 600
- 
+
+    #ctx.fillStyle = "hsl(#{@backgroundHue},54%,76%)"
     ctx.fillStyle = 'yellow'
     ctx.fillRect -15, -15, 30, 30
 
@@ -180,6 +197,14 @@ class Game extends atom.Game
         '#555'
 
       ctx.fillRect -15, -15, 30, 30
+
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo 0,0
+      ctx.lineTo 15,0
+      ctx.stokeStyle = 'black'
+      ctx.stroke()
+
       ctx.restore()
 
     for bullet in @bullets
@@ -190,6 +215,23 @@ class Game extends atom.Game
 
       ctx.fillRect -5, -5, 10, 10
       ctx.restore()
+
+  updateMenu: ->
+    @startGame() if atom.input.pressed 'start'
+
+  drawMenu: ->
+    ctx.fillStyle = '#ddd'
+    ctx.fillRect -400, -300, 800, 600
+
+    ctx.textAlign = 'center'
+    ctx.fillStyle = 'black'
+    ctx.save()
+    ctx.scale 1, -1
+    ctx.font = '100px American Typewriter'
+    ctx.fillText 'Tanks alot!', 0, 0, 600
+    ctx.font = '50px American Typewriter'
+    ctx.fillText 'Click to start', 0, 100, 600
+    ctx.restore()
    
 atom.input.bind atom.key.LEFT_ARROW, 'left'
 atom.input.bind atom.key.RIGHT_ARROW, 'right'
@@ -197,6 +239,9 @@ atom.input.bind atom.key.UP_ARROW, 'up'
 atom.input.bind atom.key.DOWN_ARROW, 'down'
 atom.input.bind atom.key.SPACE, 'shoot'
 atom.input.bind atom.key.S, 'reset'
+
+atom.input.bind atom.button.LEFT, 'start'
+
 game = new Game()
 game.run()
 
