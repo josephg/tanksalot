@@ -3,7 +3,7 @@ Function.prototype.bind ?= (new_this) ->
 
 
 window.atom = atom = {}
-atom.input = {
+atom.input =
   _bindings: {}
   _down: {}
   _pressed: {}
@@ -51,7 +51,6 @@ atom.input = {
     if @_bindings[atom.button.RIGHT]
       e.stopPropagation()
       e.preventDefault()
-}
 
 document.onkeydown = (args...) -> atom.input.onkeydown args...
 document.onkeyup = (args...) -> atom.input.onkeyup args...
@@ -111,9 +110,9 @@ atom.loadSound = (url, callback) ->
 
   request.onload = ->
     atom.audioContext.decodeAudioData request.response, (buffer) ->
-      source = audioCtx.createBufferSource()
-      source.buffer = buffer
-      callback null, source
+      #source = audioCtx.createBufferSource()
+      #source.buffer = buffer
+      callback null, buffer
     , (error) ->
       callback error
 

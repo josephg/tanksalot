@@ -1,6 +1,7 @@
 
 canvas = atom.canvas
 ctx = atom.ctx
+audioCtx = atom.audioContext
 
 id = 0
 speed = 100
@@ -19,6 +20,31 @@ dist2 = (a, b) ->
 within = (a, b, dist) ->
   dist2(a, b) < dist * dist
 
+sounds = {}
+
+sfx =
+  menu: 'defiance-ohio--tanks-tanks-tanks.mp3'
+  shoot: 'shoot.wav'
+
+loaded = 0
+
+for s, url of sfx
+  do (s, url) ->
+    atom.loadSound "sounds/#{url}", (error, buffer) ->
+      return console.error error if error
+      sounds[s] = buffer
+      console.log s, buffer
+      loaded++
+      if loaded == 2
+        doneLoading()
+
+play = (name) ->
+  source = audioCtx.createBufferSource()
+  source.buffer = sounds[name]
+  source.connect audioCtx.destination
+  source.noteOn 0
+  source
+
 class Game extends atom.Game
   constructor: ->
     super()
@@ -27,10 +53,15 @@ class Game extends atom.Game
     canvas.height = 600
     ctx.translate 400, 300
     ctx.scale 1, -1
+    @startMenu()
 
+  startMenu: ->
     @state = 'menu'
+    @menuMusic = play 'menu'
+    @menuMusic.loop = true
 
   startGame: ->
+    @menuMusic.noteOff 0
     @state = 'game'
     @mode = 'puzzle'
     @score = 0
@@ -40,7 +71,7 @@ class Game extends atom.Game
     @reset()
 
   endGame: ->
-    @state = 'menu'
+    @startMenu()
 
   reset: (winteam) ->
     @nextId++ if @currentTank?.team != winteam
@@ -53,6 +84,7 @@ class Game extends atom.Game
       id: @nextId++
       history: []
       alive: true
+      lastShot: -Infinity
 
     @tanks.push @currentTank
 
@@ -77,6 +109,7 @@ class Game extends atom.Game
         tank.y = -tank.y
 
       tank.alive = true
+      tank.lastShot = -Infinity
 
     @tick = 0
     @bullets = []
@@ -102,7 +135,9 @@ class Game extends atom.Game
       actions |= 8
 
     if atom.input.pressed 'shoot'
-      actions |= 16
+      actions |= 0x10
+    if atom.input.down 'shoot'
+      actions |= 0x20
 
     @currentTank.history.push actions
 
@@ -121,7 +156,8 @@ class Game extends atom.Game
       if actions & 8
         tank.angle -= 2 * dt
 
-      if actions & 16
+      if (actions & 0x10 and tank.lastShot < @tick - 15) or (actions & 0x20 and tank.lastShot < @tick - 30)
+        tank.lastShot = @tick
         @bullets.push
           x: tank.x
           y: tank.y
@@ -129,6 +165,9 @@ class Game extends atom.Game
           team: tank.team
           owner: tank.id
           alive: true
+
+        play 'shoot'
+
 
     i = 0
     # Update particles and delete any that have expired
@@ -142,6 +181,9 @@ class Game extends atom.Game
       else
         i++
 
+    # Tank vs wall
+    for t in @tanks
+      t.alive = false unless -385 < t.x < 385 and -285 < t.y < 285
     
     # Tank vs tank
     for a in @tanks
@@ -227,9 +269,9 @@ class Game extends atom.Game
     ctx.fillStyle = 'black'
     ctx.save()
     ctx.scale 1, -1
-    ctx.font = '100px American Typewriter'
+    ctx.font = '100px American Typewriter, Courier'
     ctx.fillText 'Tanks alot!', 0, 0, 600
-    ctx.font = '50px American Typewriter'
+    ctx.font = '50px American Typewriter, Courier'
     ctx.fillText 'Click to start', 0, 100, 600
     ctx.restore()
    
@@ -242,6 +284,7 @@ atom.input.bind atom.key.S, 'reset'
 
 atom.input.bind atom.button.LEFT, 'start'
 
-game = new Game()
-game.run()
+doneLoading = ->
+  game = new Game()
+  game.run()
 
