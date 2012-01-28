@@ -22,6 +22,7 @@ within = (a, b, dist) ->
 class Game extends atom.Game
   constructor: ->
     super()
+    @mode = 'puzzle'
 
     canvas.width = 800
     canvas.height = 600
@@ -44,15 +45,25 @@ class Game extends atom.Game
     @tanks.push @currentTank
 
     for tank in @tanks
+      tank.x = 300
       if tank.team
-        tank.x = -350
         tank.angle = 0
       else
-        tank.x = 350
         tank.angle = TAU/2
 
-      tank.y = Math.floor(tank.id/2) * 40 - 250
-      tank.y = -tank.y if tank.team
+      if tank.id >= 20
+        tank.x += 50
+
+      switch @mode
+        when 'sp' or 'mp'
+          tank.y = Math.floor((tank.id % 20)/2) * 50 - 225
+        when 'puzzle'
+          tank.y = Math.floor(tank.id/2) * 100 - 200
+
+      if tank.team
+        tank.x = -tank.x
+        tank.y = -tank.y
+
       tank.alive = true
 
     @tick = 0
@@ -62,7 +73,7 @@ class Game extends atom.Game
     dt = 1/60
 
     if atom.input.pressed 'reset'
-      @reset()
+      @reset @currentTank.team
 
     actions = 0
 
@@ -132,6 +143,11 @@ class Game extends atom.Game
         if within t, b, 20
           t.alive = b.alive = false
 
+    # All tanks dead
+    aliveTanks = 0
+    aliveTanks++ for t in @tanks when t.alive and t.history[@tick]?
+    return @reset !@currentTank.team unless aliveTanks
+    
     @tick++
 
     # Tank vs iwin button
@@ -139,10 +155,7 @@ class Game extends atom.Game
       if within t, {x:0, y:0}, 15
         @reset t.team
 
-    aliveTanks = 0
-    aliveTanks++ for t in @tanks when t.alive
-    @reset !@currentTank.team unless aliveTanks
-    
+
   draw: ->
     #ctx.fillStyle = "hsl(#{@backgroundHue},54%,76%)"
     ctx.fillStyle = '#ccc'
