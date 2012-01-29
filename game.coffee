@@ -64,6 +64,7 @@ mixer = audioCtx.createGainNode()
 mixer.connect audioCtx.destination
 
 play = (name) ->
+  return unless sounds[name]
   source = audioCtx.createBufferSource()
   source.buffer = sounds[name]
   source.connect mixer
@@ -74,6 +75,14 @@ class Game extends atom.Game
   constructor: ->
     super()
 
+    @background = []
+    for i in [0..26]
+      @background.push {
+        tile: Math.floor Math.random()*5
+        x: Math.floor(Math.random()*800)-400
+        y: Math.floor(Math.random()*600)-300
+      }
+
     canvas.width = 800
     canvas.height = 600
     ctx.translate 400, 300
@@ -83,10 +92,10 @@ class Game extends atom.Game
   startMenu: ->
     @state = 'menu'
     @menuMusic = play 'menu'
-    @menuMusic.loop = true
+    @menuMusic?.loop = true
 
   startGame: ->
-    @menuMusic.noteOff 0
+    @menuMusic?.noteOff 0
     @state = 'game'
     @mode = 'puzzle'
     @score = 0
@@ -259,6 +268,8 @@ class Game extends atom.Game
     #ctx.fillStyle = 'red'
     #ctx.fillRect -15, -15, 30, 30
 
+    @drawBackground()
+
     ctx.save()
     ctx.scale 1, -1
     ctx.drawImage spritesheet, 32, 128, 32, 32, -16, -16, 32, 32
@@ -318,7 +329,10 @@ class Game extends atom.Game
       ###
 
       ctx.restore()
-   
+
+  drawBackground: ->
+    for b in @background
+      ctx.drawImage spritesheet, (80+16*b.tile)*2,16*2, 32, 32, b.x, b.y, 32, 32
 
   updateMenu: ->
     if atom.input.pressed 'start'

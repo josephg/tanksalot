@@ -116,7 +116,10 @@ atom.loadSound = (url, callback) ->
     , (error) ->
       callback error
 
-  request.send()
+  try
+    request.send()
+  catch e
+    callback e.message
 
 requestAnimationFrame = window.requestAnimationFrame or
   window.webkitRequestAnimationFrame or
