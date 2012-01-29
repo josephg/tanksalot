@@ -20,28 +20,53 @@ dist2 = (a, b) ->
 within = (a, b, dist) ->
   dist2(a, b) < dist * dist
 
+objectives = [
+  {name:'win box', text:'Get the box'}
+  {name:'win box', text:'Get the box'}
+  {name:'win', text:'Make your team win'}
+  {name:'win', text:'Make your team win'}
+  {name:'last tank alive', text:'Be the last tank alive'}
+  {name:'kill 3', text:'Kill 3 tanks'}
+  {name:'win box timelimit', text:'Get the box within 15 seconds'}
+  {name:'get shot by tank 1', text:'Get killed by the first tank'}
+  {name:'win box', text:'Get the box'}
+  {name:'pileup', text:'Cause a 3-tank pileup'}
+]
+
 sounds = {}
 
-sfx =
-  menu: 'defiance-ohio--tanks-tanks-tanks.mp3'
-  shoot: 'shoot.wav'
-
 loaded = 0
+didLoad = ->
+  loaded++
+  doneLoading() if loaded is 8 # number of sfx + 1
+
+sfx =
+  menu: 'tanks-tanks-tanks.mp3'
+  shoot: 'shoot.wav'
+  crash: 'crash.wav'
+  explode: 'explode.wav'
+  win: 'win.wav'
+  youdie: 'youdie.wav'
+  thud: 'thud.wav'
+
+spritesheet = new Image
+spritesheet.src = 'tanks.png'
+spritesheet.onload = -> didLoad()
 
 for s, url of sfx
   do (s, url) ->
     atom.loadSound "sounds/#{url}", (error, buffer) ->
-      return console.error error if error
-      sounds[s] = buffer
-      console.log s, buffer
-      loaded++
-      if loaded == 2
-        doneLoading()
+      console.error error if error
+      sounds[s] = buffer if buffer
+      didLoad()
+
+mixer = audioCtx.createGainNode()
+mixer.connect audioCtx.destination
 
 play = (name) ->
   source = audioCtx.createBufferSource()
   source.buffer = sounds[name]
-  source.connect audioCtx.destination
+  source.connect mixer
   source.noteOn 0
   source
 
@@ -69,12 +94,14 @@ class Game extends atom.Game
     @nextId = 0
     @currentTank = null
     @reset()
+    @round = 0
 
   endGame: ->
     @startMenu()
 
   reset: (winteam) ->
-    @nextId++ if @currentTank?.team != winteam
+    @round++
+    @nextId++ if @currentTank?.team != winteam and @mode != 'puzzle'
 
     if (@mode is 'puzzle' and @nextId is 10) or (@mode is 'sp' and @nextId is 40)
       @endGame()
@@ -83,8 +110,6 @@ class Game extends atom.Game
       team: !!(@nextId % 2)
       id: @nextId++
       history: []
-      alive: true
-      lastShot: -Infinity
 
     @tanks.push @currentTank
 
@@ -110,6 +135,7 @@ class Game extends atom.Game
 
       tank.alive = true
       tank.lastShot = -Infinity
+      tank.distance = 10000
 
     @tick = 0
     @bullets = []
@@ -147,8 +173,10 @@ class Game extends atom.Game
       actions = tank.history[@tick]
 
       if actions & 1
+        tank.distance++
         update dt, tank, 140
       else if actions & 2
+        tank.distance--
         update dt, tank, -80
 
       if actions & 4
@@ -188,15 +216,21 @@ class Game extends atom.Game
     # Tank vs tank
     for a in @tanks
       for b in @tanks
-        continue if a is b
+        continue if a is b or !a.alive and !b.alive
         if within a, b, 30
           a.alive = b.alive = false
+          play 'crash'
 
     # Tank vs bullet
     for t in @tanks
       for b in @bullets
         continue if b.owner is t.id
         if within t, b, 20
+          if t.alive
+            play 'explode'
+          else
+            play 'thud'
+
           t.alive = b.alive = false
 
     # All tanks dead
@@ -209,24 +243,59 @@ class Game extends atom.Game
     # Tank vs iwin button
     for t in @tanks
       if within t, {x:0, y:0}, 15
+        if t.team == @currentTank.team
+          play 'win'
+        else
+          play 'youdie'
         @reset t.team
-
-    
 
   draw: ->
     return @drawMenu() if @state is 'menu'
 
-    ctx.fillStyle = '#ccc'
+    ctx.fillStyle = 'rgb(215,232,148)'
     ctx.fillRect -400, -300, 800, 600
 
     #ctx.fillStyle = "hsl(#{@backgroundHue},54%,76%)"
-    ctx.fillStyle = 'yellow'
-    ctx.fillRect -15, -15, 30, 30
+    #ctx.fillStyle = 'red'
+    #ctx.fillRect -15, -15, 30, 30
+
+    ctx.save()
+    ctx.scale 1, -1
+    ctx.drawImage spritesheet, 32, 128, 32, 32, -16, -16, 32, 32
+    ctx.restore()
+
+      #16*2, 64*2
+
+    for bullet in @bullets
+      ctx.save()
+      ctx.translate bullet.x, bullet.y
+      ctx.rotate bullet.angle + TAU/4
+      #ctx.fillStyle = 'black'
+      #ctx.fillRect -5, -5, 10, 10
+
+      frame = Math.floor(@tick / 3) % 3
+      ctx.drawImage spritesheet, 32 + 8*frame, 96, 6, 18, -3, -9, 6, 18
+    # 16*2, 48*2, 6px wide, 8px apart, 9*2 high
+
+      ctx.restore()
+
 
     for tank in @tanks
       ctx.save()
       ctx.translate tank.x, tank.y
-      ctx.rotate tank.angle
+      ctx.rotate tank.angle + TAU/4
+
+      sprite = if tank.team then 0 else 1
+      if tank.alive
+        frame = Math.floor(tank.distance / 2) % 4
+        ctx.drawImage spritesheet, 64 + frame*32, 96 + sprite*32, 32, 32, -16, -16, 32, 32
+      else
+        ctx.drawImage spritesheet, 64, 192 + sprite*32, 32, 32, -16, -16, 32, 32
+
+      #32, 96
+      #32, 112
+
+      ###
       ctx.fillStyle = if tank.alive
         if tank is @currentTank
           if tank.team then 'darkblue' else 'darkred'
@@ -246,23 +315,23 @@ class Game extends atom.Game
       ctx.lineTo 15,0
       ctx.stokeStyle = 'black'
       ctx.stroke()
+      ###
 
       ctx.restore()
-
-    for bullet in @bullets
-      ctx.save()
-      ctx.translate bullet.x, bullet.y
-      ctx.rotate bullet.angle
-      ctx.fillStyle = 'black'
-
-      ctx.fillRect -5, -5, 10, 10
-      ctx.restore()
+   
 
   updateMenu: ->
-    @startGame() if atom.input.pressed 'start'
+    if atom.input.pressed 'start'
+      if atom.input.mouse.x > 760 and atom.input.mouse.y > 560
+        if mixer.gain.value
+          mixer.gain.value = 0
+        else
+          mixer.gain.value = 1
+      else
+        @startGame()
 
   drawMenu: ->
-    ctx.fillStyle = '#ddd'
+    ctx.fillStyle = 'rgb(215,232,148)'
     ctx.fillRect -400, -300, 800, 600
 
     ctx.textAlign = 'center'
