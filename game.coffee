@@ -264,10 +264,6 @@ class Game extends atom.Game
     ctx.fillStyle = 'rgb(215,232,148)'
     ctx.fillRect -400, -300, 800, 600
 
-    #ctx.fillStyle = "hsl(#{@backgroundHue},54%,76%)"
-    #ctx.fillStyle = 'red'
-    #ctx.fillRect -15, -15, 30, 30
-
     @drawBackground()
 
     ctx.save()
@@ -275,18 +271,13 @@ class Game extends atom.Game
     ctx.drawImage spritesheet, 32, 128, 32, 32, -16, -16, 32, 32
     ctx.restore()
 
-      #16*2, 64*2
-
     for bullet in @bullets
       ctx.save()
       ctx.translate bullet.x, bullet.y
       ctx.rotate bullet.angle + TAU/4
-      #ctx.fillStyle = 'black'
-      #ctx.fillRect -5, -5, 10, 10
 
       frame = Math.floor(@tick / 3) % 3
       ctx.drawImage spritesheet, 32 + 8*frame, 96, 6, 18, -3, -9, 6, 18
-    # 16*2, 48*2, 6px wide, 8px apart, 9*2 high
 
       ctx.restore()
 
@@ -302,31 +293,6 @@ class Game extends atom.Game
         ctx.drawImage spritesheet, 64 + frame*32, 96 + sprite*32, 32, 32, -16, -16, 32, 32
       else
         ctx.drawImage spritesheet, 64, 192 + sprite*32, 32, 32, -16, -16, 32, 32
-
-      #32, 96
-      #32, 112
-
-      ###
-      ctx.fillStyle = if tank.alive
-        if tank is @currentTank
-          if tank.team then 'darkblue' else 'darkred'
-        else if tank.team
-          'blue'
-        else
-          'red'
-      else
-        # Dead
-        '#555'
-
-      ctx.fillRect -15, -15, 30, 30
-
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.moveTo 0,0
-      ctx.lineTo 15,0
-      ctx.stokeStyle = 'black'
-      ctx.stroke()
-      ###
 
       ctx.restore()
 
@@ -352,9 +318,9 @@ class Game extends atom.Game
     ctx.fillStyle = 'black'
     ctx.save()
     ctx.scale 1, -1
-    ctx.font = '100px American Typewriter, Courier'
+    ctx.font = '60px KongtextRegular'
     ctx.fillText 'Tanks alot!', 0, 0, 600
-    ctx.font = '50px American Typewriter, Courier'
+    ctx.font = '20px KongtextRegular'
     ctx.fillText 'Click to start', 0, 100, 600
     ctx.restore()
    
