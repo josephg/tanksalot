@@ -43,6 +43,8 @@ didLoad = ->
 
 window.onload = didLoad
 
+muted = false
+
 sfx =
 #  menu: 'tanks-tanks-tanks.mp3'
 #  game: 'game.mp3'
@@ -64,12 +66,12 @@ for s, url of sfx
       sounds[s] = buffer if buffer
       didLoad()
 
-mixer = audioCtx.createGainNode()
-mixer.connect audioCtx.destination
+mixer = audioCtx?.createGainNode()
+mixer?.connect audioCtx.destination
 
 
 play = (name, time) ->
-  return unless sounds[name]
+  return unless sounds[name] and audioCtx
   source = audioCtx.createBufferSource()
   source.buffer = sounds[name]
   source.connect mixer
@@ -100,18 +102,23 @@ class Game extends atom.Game
     @state = 'menu'  # 'menu', 'game', 'game over', 'round over', 'round starting'
 
   startMenuMusic: ->
-    @gameMusic.pause()
-    @menuMusic.currentTime = 0
-    @menuMusic.play()
+    @gameMusic?.pause()
+    try
+      unless @menuMusic?.currentTime
+        @menuMusic?.currentTime = 0
+        @menuMusic?.play()
 
     #@gameMusic?.noteOff 0
     #@menuMusic = play 'menu'
     #@menuMusic?.loop = true
 
   startGameMusic: ->
-    @menuMusic.pause()
-    @gameMusic.currentTime = 0
-    @gameMusic.play()
+    @menuMusic?.autoplay = false
+    @menuMusic?.pause()
+    try
+      unless @gameMusic?.currentTime
+        @gameMusic?.currentTime = 0
+        @gameMusic?.play()
 
     #@gameMusic?.noteOff 0
     #@gameMusic = play 'game'
@@ -428,7 +435,7 @@ class Game extends atom.Game
           ctx.font = '20px KongtextRegular'
           ctx.fillText 'Press space to retry', 0, 100, 600
 
-    if mixer.gain.value
+    if !muted
       ctx.drawImage spritesheet, 94*2, 99*2, 20, 20, 360, 260, 20, 20
     else
       ctx.drawImage spritesheet, 81*2, 99*2, 20, 20, 360, 260, 20, 20
@@ -440,12 +447,14 @@ class Game extends atom.Game
       ctx.drawImage spritesheet, (80+16*b.tile)*2,16*2, 32, 32, b.x, b.y, 32, 32
 
   toggleMute: ->
-    if mixer.gain.value
-      mixer.gain.value = 0
+    if !muted
+      muted = true
+      mixer?.gain.value = 0
       @menuMusic?.volume = 0
       @gameMusic?.volume = 0
     else
-      mixer.gain.value = 1
+      muted = false
+      mixer?.gain.value = 1
       @menuMusic?.volume = 1
       @gameMusic?.volume = 1
  
@@ -470,7 +479,7 @@ class Game extends atom.Game
     ctx.font = '20px KongtextRegular'
     ctx.fillText 'Press space to start', 0, 20, 600
 
-    if mixer.gain.value
+    if !muted
       ctx.drawImage spritesheet, 94*2, 99*2, 20, 20, 360, 260, 20, 20
     else
       ctx.drawImage spritesheet, 81*2, 99*2, 20, 20, 360, 260, 20, 20

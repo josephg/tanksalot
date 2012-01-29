@@ -104,6 +104,8 @@ atom.canvas.oncontextmenu = atom.input.oncontextmenu.bind(atom.input)
 atom.audioContext = new webkitAudioContext?()
 
 atom.loadSound = (url, callback) ->
+  return callback 'No audio support' unless atom.audioContext
+
   request = new XMLHttpRequest()
   request.open 'GET', url, true
   request.responseType = 'arraybuffer'
