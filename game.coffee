@@ -20,15 +20,16 @@ dist2 = (a, b) ->
 within = (a, b, dist) ->
   dist2(a, b) < dist * dist
 
+# Not actually used...
 objectives = [
   {name:'win box', text:'Get the box'}
   {name:'win box', text:'Get the box'}
   {name:'win', text:'Make your team win'}
   {name:'win', text:'Make your team win'}
-  {name:'last tank alive', text:'Be the last tank alive'}
+  {name:'last alive', text:'Be the last tank alive'}
   {name:'kill 3', text:'Kill 3 tanks'}
   {name:'win box timelimit', text:'Get the box within 15 seconds'}
-  {name:'get shot by tank 1', text:'Get killed by the first tank'}
+  {name:'killed by tank 1', text:'Get killed by the first tank'}
   {name:'win box', text:'Get the box'}
   {name:'pileup', text:'Cause a 3-tank pileup'}
 ]
@@ -38,10 +39,13 @@ sounds = {}
 loaded = 0
 didLoad = ->
   loaded++
-  doneLoading() if loaded is 8 # number of sfx + 1
+  doneLoading() if loaded is 8 # MUST BE number of sfx + 1
+
+window.onload = didLoad
 
 sfx =
-  menu: 'tanks-tanks-tanks.mp3'
+#  menu: 'tanks-tanks-tanks.mp3'
+#  game: 'game.mp3'
   shoot: 'shoot.wav'
   crash: 'crash.wav'
   explode: 'explode.wav'
@@ -63,12 +67,13 @@ for s, url of sfx
 mixer = audioCtx.createGainNode()
 mixer.connect audioCtx.destination
 
-play = (name) ->
+
+play = (name, time) ->
   return unless sounds[name]
   source = audioCtx.createBufferSource()
   source.buffer = sounds[name]
   source.connect mixer
-  source.noteOn 0
+  source.noteOn time ? 0
   source
 
 class Game extends atom.Game
@@ -87,30 +92,63 @@ class Game extends atom.Game
     canvas.height = 600
     ctx.translate 400, 300
     ctx.scale 1, -1
-    @startMenu()
 
-  startMenu: ->
-    @state = 'menu'
-    @menuMusic = play 'menu'
-    @menuMusic?.loop = true
+    @menuMusic = document.getElementById 'menu'
+    @gameMusic = document.getElementById 'music'
+
+    @startMenuMusic()
+    @state = 'menu'  # 'menu', 'game', 'game over', 'round over', 'round starting'
+
+  startMenuMusic: ->
+    @gameMusic.pause()
+    @menuMusic.currentTime = 0
+    @menuMusic.play()
+
+    #@gameMusic?.noteOff 0
+    #@menuMusic = play 'menu'
+    #@menuMusic?.loop = true
+
+  startGameMusic: ->
+    @menuMusic.pause()
+    @gameMusic.currentTime = 0
+    @gameMusic.play()
+
+    #@gameMusic?.noteOff 0
+    #@gameMusic = play 'game'
+    #@gameMusic?.loop = true
+
+  startRound: ->
+    @state = 'round starting'
+    @stateTick = 0
+    @reset()
 
   startGame: ->
-    @menuMusic?.noteOff 0
-    @state = 'game'
-    @mode = 'puzzle'
+    #@menuMusic?.noteOff 0
+    @menuMusic?.pause()
+
+    @startGameMusic()
+    @mode = 'sp'
     @score = 0
     @tanks = []
     @nextId = 0
     @currentTank = null
-    @reset()
+    @startRound()
     @round = 0
 
   endGame: ->
-    @startMenu()
+    @state = 'game over'
 
-  reset: (winteam) ->
+  endRound: (winteam) ->
+    if @currentTank.team != winteam
+      @endGame()
+    else
+      @state = 'round over'
+
+    @stateTick = 0
+
+  reset: ->
     @round++
-    @nextId++ if @currentTank?.team != winteam and @mode != 'puzzle'
+    #@nextId++ if @currentTank?.team != winteam and @mode != 'puzzle'
 
     if (@mode is 'puzzle' and @nextId is 10) or (@mode is 'sp' and @nextId is 40)
       @endGame()
@@ -118,7 +156,7 @@ class Game extends atom.Game
     @currentTank =
       team: !!(@nextId % 2)
       id: @nextId++
-      history: []
+      history: []#new Array 60*30
 
     @tanks.push @currentTank
 
@@ -146,16 +184,40 @@ class Game extends atom.Game
       tank.lastShot = -Infinity
       tank.distance = 10000
 
+      tank.kills = 0
+
     @tick = 0
     @bullets = []
 
   update: (dt) ->
-    return @updateMenu() if @state is 'menu'
-
     dt = 1/60
+
+    @stateTick++
+
+    return @updateMenu() if @state is 'menu'
+    
+    if atom.input.pressed('click') and atom.input.mouse.x > 700 and atom.input.mouse.y > 500
+      @toggleMute()
+
+    if @state is 'game over' and @stateTick >= 80
+      @updateMenu() # Do click/space detection
+      #if @stateTick == 80
+      #  @startMenuMusic()
+
+    if @state is 'round starting'
+      secs = 3 - Math.floor(@stateTick / 35)
+      if secs < 0
+        @state = 'game'
+
+    if @state is 'round over'
+      @score += 4 if @stateTick <= 25
+      if @stateTick > 70
+        @startRound()
 
     if atom.input.pressed 'reset'
       @reset @currentTank.team
+
+    return unless @state is 'game'
 
     actions = 0
 
@@ -220,7 +282,10 @@ class Game extends atom.Game
 
     # Tank vs wall
     for t in @tanks
-      t.alive = false unless -385 < t.x < 385 and -285 < t.y < 285
+      continue if !t.alive
+      unless -385 < t.x < 385 and -285 < t.y < 285
+        t.alive = false
+        play 'crash'
     
     # Tank vs tank
     for a in @tanks
@@ -236,7 +301,16 @@ class Game extends atom.Game
         continue if b.owner is t.id
         if within t, b, 20
           if t.alive
+            if b.owner == @currentTank.id
+              @score += 10
+
             play 'explode'
+            #console.log b.owner
+            #@tanks[b.owner].kills++
+            #if @tanks[b.owner].kills is 3 and b.owner == @currentTank.id
+            #  @achieved 'kill 3'
+            #if b.owner == 0 and t == @currentTank
+            #  @achieved 'killed by tank 1'
           else
             play 'thud'
 
@@ -245,18 +319,31 @@ class Game extends atom.Game
     # All tanks dead
     aliveTanks = 0
     aliveTanks++ for t in @tanks when t.alive and t.history[@tick]?
-    return @reset !@currentTank.team unless aliveTanks
+    return @endRound null unless aliveTanks
+
+    if aliveTanks == 1
+      tank = t for t in @tanks when t.alive
+      if tank == @currentTank
+        @achieved 'last alive'
     
     @tick++
 
     # Tank vs iwin button
     for t in @tanks
-      if within t, {x:0, y:0}, 15
+      if within t, {x:0, y:0}, 32
+        if t == @currentTank
+          @achieved 'win box'
+          @achieved 'win box timelimit' if @tick <= 60*15
+
         if t.team == @currentTank.team
           play 'win'
+          @achieved 'win'
         else
           play 'youdie'
-        @reset t.team
+        @endRound t.team
+  
+  achieved: (thing) ->
+    console.log 'done', thing unless thing is 'last alive'
 
   draw: ->
     return @drawMenu() if @state is 'menu'
@@ -265,11 +352,6 @@ class Game extends atom.Game
     ctx.fillRect -400, -300, 800, 600
 
     @drawBackground()
-
-    ctx.save()
-    ctx.scale 1, -1
-    ctx.drawImage spritesheet, 32, 128, 32, 32, -16, -16, 32, 32
-    ctx.restore()
 
     for bullet in @bullets
       ctx.save()
@@ -287,6 +369,15 @@ class Game extends atom.Game
       ctx.translate tank.x, tank.y
       ctx.rotate tank.angle + TAU/4
 
+      if tank is @currentTank
+        ctx.lineWidth = 1.5
+        if tank.team
+          ctx.strokeStyle = 'rgb(32,70,49)'
+        else
+          ctx.strokeStyle = 'rgb(70,76,33)'
+          
+        ctx.strokeRect -18, -18, 36, 36
+
       sprite = if tank.team then 0 else 1
       if tank.alive
         frame = Math.floor(tank.distance / 2) % 4
@@ -296,33 +387,98 @@ class Game extends atom.Game
 
       ctx.restore()
 
+    # iwin button
+    ctx.save()
+    ctx.scale 1, -1
+    ctx.drawImage spritesheet, 224, 64, 64, 64, -32, -48, 64, 64
+    #ctx.drawImage spritesheet, 32, 128, 32, 32, -16, -16, 32, 32
+    ctx.restore()
+
+    ctx.scale 1, -1
+    ctx.textAlign = 'left'
+    ctx.font = '20px KongtextRegular'
+    ctx.fillStyle = 'rgb(32,70,49)'
+    ctx.fillText 'SCORE:', 50, -260, 600
+
+    ctx.textAlign = 'right'
+    ctx.fillText "#{@score}", 280, -260, 600
+
+    switch @state
+      when 'round over'
+        ctx.textAlign = 'center'
+        ctx.font = '26px KongtextRegular'
+        ctx.fillStyle = 'rgb(32,70,49)'
+        ctx.fillText 'Mission Complete', 0, -110, 600
+      when 'round starting'
+        secs = 3 - Math.floor(@stateTick / 35)
+        secs = 'GO!' if secs is 0
+
+        ctx.textAlign = 'center'
+        ctx.font = '70px KongtextRegular'
+        ctx.fillStyle = 'rgb(32,70,49)'
+        ctx.fillText "#{secs}", 0, -110, 600
+      when 'game over'
+        if (@stateTick % 30) < 15 or @stateTick >= 30*3
+          ctx.textAlign = 'center'
+          ctx.font = '50px KongtextRegular'
+          ctx.fillStyle = 'rgb(32,70,49)'
+          ctx.fillText "GAME OVER", 0, -110, 600
+
+        if @stateTick >= 30 * 3
+          ctx.font = '20px KongtextRegular'
+          ctx.fillText 'Press space to retry', 0, 100, 600
+
+    if mixer.gain.value
+      ctx.drawImage spritesheet, 94*2, 99*2, 20, 20, 360, 260, 20, 20
+    else
+      ctx.drawImage spritesheet, 81*2, 99*2, 20, 20, 360, 260, 20, 20
+ 
+    ctx.scale 1, -1
+
   drawBackground: ->
     for b in @background
       ctx.drawImage spritesheet, (80+16*b.tile)*2,16*2, 32, 32, b.x, b.y, 32, 32
 
+  toggleMute: ->
+    if mixer.gain.value
+      mixer.gain.value = 0
+      @menuMusic?.volume = 0
+      @gameMusic?.volume = 0
+    else
+      mixer.gain.value = 1
+      @menuMusic?.volume = 1
+      @gameMusic?.volume = 1
+ 
   updateMenu: ->
-    if atom.input.pressed 'start'
-      if atom.input.mouse.x > 760 and atom.input.mouse.y > 560
-        if mixer.gain.value
-          mixer.gain.value = 0
-        else
-          mixer.gain.value = 1
-      else
-        @startGame()
+    if atom.input.pressed('click') or atom.input.pressed('shoot')
+     if atom.input.mouse.x > 700 and atom.input.mouse.y > 500
+       @toggleMute()
+     else
+       @startGame()
 
   drawMenu: ->
+    # 209 10, - 387, - 47
     ctx.fillStyle = 'rgb(215,232,148)'
     ctx.fillRect -400, -300, 800, 600
 
     ctx.textAlign = 'center'
-    ctx.fillStyle = 'black'
+    ctx.fillStyle = 'rgb(32,70,49)'
     ctx.save()
     ctx.scale 1, -1
     ctx.font = '60px KongtextRegular'
-    ctx.fillText 'Tanks alot!', 0, 0, 600
+    ctx.fillText 'Tanks a lot!', 0, -80, 600
     ctx.font = '20px KongtextRegular'
-    ctx.fillText 'Click to start', 0, 100, 600
+    ctx.fillText 'Press space to start', 0, 20, 600
+
+    if mixer.gain.value
+      ctx.drawImage spritesheet, 94*2, 99*2, 20, 20, 360, 260, 20, 20
+    else
+      ctx.drawImage spritesheet, 81*2, 99*2, 20, 20, 360, 260, 20, 20
+
+    ctx.drawImage spritesheet, 209*2, 10*2, 179*2, 38*2, -178, 130, 179*2, 38*2
+
     ctx.restore()
+
    
 atom.input.bind atom.key.LEFT_ARROW, 'left'
 atom.input.bind atom.key.RIGHT_ARROW, 'right'
@@ -331,9 +487,9 @@ atom.input.bind atom.key.DOWN_ARROW, 'down'
 atom.input.bind atom.key.SPACE, 'shoot'
 atom.input.bind atom.key.S, 'reset'
 
-atom.input.bind atom.button.LEFT, 'start'
+atom.input.bind atom.button.LEFT, 'click'
+
 
 doneLoading = ->
   game = new Game()
   game.run()
-
