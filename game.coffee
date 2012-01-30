@@ -1,5 +1,8 @@
 
 canvas = atom.canvas
+
+if /Windows.*Chrome\/16/.test navigator.userAgent
+	canvas.style.borderRadius = 0
 ctx = atom.ctx
 audioCtx = atom.audioContext
 
