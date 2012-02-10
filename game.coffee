@@ -146,6 +146,16 @@ class Game extends atom.Game
     @round = 0
 
   endGame: ->
+    req = new XMLHttpRequest
+    req.open 'POST', 'http://libris.nornagon.net/jca/tanks.cgi', true
+    req.setRequestHeader 'Content-Type', 'application/json;charset=UTF-8'
+    req.send JSON.stringify {
+      tanks: @tanks.map (t) -> {
+        id:t.id, team: t.team, history:t.history
+      }
+      score: @score
+      round: @round
+    }
     @state = 'game over'
 
   endRound: (winteam) ->
