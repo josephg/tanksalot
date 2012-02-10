@@ -188,6 +188,21 @@ Game = (function() {
     return this.round = 0;
   };
   Game.prototype.endGame = function() {
+    var req;
+    req = new XMLHttpRequest;
+    req.open('POST', 'http://libris.nornagon.net/jca/tanks.cgi', true);
+    req.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
+    req.send(JSON.stringify({
+      tanks: this.tanks.map(function(t) {
+        return {
+          id: t.id,
+          team: t.team,
+          history: t.history
+        };
+      }),
+      score: this.score,
+      round: this.round
+    }));
     return this.state = 'game over';
   };
   Game.prototype.endRound = function(winteam) {
