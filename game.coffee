@@ -1,9 +1,13 @@
-
 canvas = atom.canvas
+canvas.width = 800
+canvas.height = 600
+ctx = atom.ctx
+ctx.translate 400, 300
+ctx.scale 1, -1
+
 
 if /Windows.*Chrome\/16/.test navigator.userAgent
   canvas.style.borderRadius = 0
-ctx = atom.ctx
 audioCtx = atom.audioContext
 
 id = 0
@@ -81,10 +85,61 @@ play = (name, time) ->
   source.noteOn time ? 0
   source
 
-class Game extends atom.Game
-  constructor: ->
-    super()
+toggleMute = ->
+  if !muted
+    muted = true
+    mixer?.gain.value = 0
+    e.volume = 0 for e in document.getElementsByTagName 'audio'
+  else
+    muted = false
+    mixer?.gain.value = 1
+    e.volume = 1 for e in document.getElementsByTagName 'audio'
 
+
+class AttractScreen
+  constructor: (@game) ->
+    @music = document.getElementById 'menu'
+    try
+      unless @music?.currentTime
+        @music?.currentTime = 0
+        @music?.play()
+
+  update: ->
+    if atom.input.pressed('click') or atom.input.pressed('shoot')
+      if atom.input.mouse.x > 700 and atom.input.mouse.y > 500
+        toggleMute()
+      else
+        @game.enter new MainScreen @game
+
+  draw: ->
+    ctx.fillStyle = 'rgb(215,232,148)'
+    ctx.fillRect -400, -300, 800, 600
+
+    ctx.textAlign = 'center'
+    ctx.fillStyle = 'rgb(32,70,49)'
+    ctx.save()
+    ctx.scale 1, -1
+    ctx.font = '60px KongtextRegular'
+    ctx.fillText 'Tanks a lot!', 0, -80, 600
+    ctx.font = '20px KongtextRegular'
+    ctx.fillText 'Press space to start', 0, 20, 600
+
+    if !muted
+      ctx.drawImage spritesheet, 94*2, 99*2, 20, 20, 360, 260, 20, 20
+    else
+      ctx.drawImage spritesheet, 81*2, 99*2, 20, 20, 360, 260, 20, 20
+
+    ctx.drawImage spritesheet, 209*2, 10*2, 179*2, 38*2, -178, 130, 179*2, 38*2
+
+    ctx.restore()
+
+
+  exit: ->
+    @music?.autoplay = false
+    @music?.pause()
+
+class MainScreen
+  constructor: (@game) ->
     @background = []
     for i in [0..26]
       @background.push {
@@ -93,39 +148,18 @@ class Game extends atom.Game
         y: Math.floor(Math.random()*600)-300
       }
 
-    canvas.width = 800
-    canvas.height = 600
-    ctx.translate 400, 300
-    ctx.scale 1, -1
+    @music = document.getElementById 'music'
+    @state = ''  # 'game', 'game over', 'round over', 'round starting'
+    @startGame()
 
-    @menuMusic = document.getElementById 'menu'
-    @gameMusic = document.getElementById 'music'
-
-    @startMenuMusic()
-    @state = 'menu'  # 'menu', 'game', 'game over', 'round over', 'round starting'
-
-  startMenuMusic: ->
-    @gameMusic?.pause()
+  enter: ->
     try
-      unless @menuMusic?.currentTime
-        @menuMusic?.currentTime = 0
-        @menuMusic?.play()
+      unless @music?.currentTime
+        @music?.currentTime = 0
+        @music?.play()
 
-    #@gameMusic?.noteOff 0
-    #@menuMusic = play 'menu'
-    #@menuMusic?.loop = true
-
-  startGameMusic: ->
-    @menuMusic?.autoplay = false
-    @menuMusic?.pause()
-    try
-      unless @gameMusic?.currentTime
-        @gameMusic?.currentTime = 0
-        @gameMusic?.play()
-
-    #@gameMusic?.noteOff 0
-    #@gameMusic = play 'game'
-    #@gameMusic?.loop = true
+  exit: ->
+    @music?.pause()
 
   startRound: ->
     @state = 'round starting'
@@ -133,10 +167,6 @@ class Game extends atom.Game
     @reset()
 
   startGame: ->
-    #@menuMusic?.noteOff 0
-    @menuMusic?.pause()
-
-    @startGameMusic()
     @mode = 'sp'
     @score = 0
     @tanks = []
@@ -213,14 +243,17 @@ class Game extends atom.Game
     dt = 1/60
 
     @stateTick++
-
-    return @updateMenu() if @state is 'menu'
     
     if atom.input.pressed('click') and atom.input.mouse.x > 700 and atom.input.mouse.y > 500
-      @toggleMute()
+      toggleMute()
 
     if @state is 'game over' and @stateTick >= 80
-      @updateMenu() # Do click/space detection
+      if atom.input.pressed('click') or atom.input.pressed('shoot')
+        if atom.input.mouse.x > 700 and atom.input.mouse.y > 500
+          toggleMute()
+        else
+          @startGame()
+      #@updateMenu() # Do click/space detection
       #if @stateTick == 80
       #  @startMenuMusic()
 
@@ -366,8 +399,6 @@ class Game extends atom.Game
     console.log 'done', thing unless thing is 'last alive'
 
   draw: ->
-    return @drawMenu() if @state is 'menu'
-
     ctx.fillStyle = 'rgb(215,232,148)'
     ctx.fillRect -400, -300, 800, 600
 
@@ -459,49 +490,22 @@ class Game extends atom.Game
     for b in @background
       ctx.drawImage spritesheet, (80+16*b.tile)*2,16*2, 32, 32, b.x, b.y, 32, 32
 
-  toggleMute: ->
-    if !muted
-      muted = true
-      mixer?.gain.value = 0
-      @menuMusic?.volume = 0
-      @gameMusic?.volume = 0
-    else
-      muted = false
-      mixer?.gain.value = 1
-      @menuMusic?.volume = 1
-      @gameMusic?.volume = 1
- 
-  updateMenu: ->
-    if atom.input.pressed('click') or atom.input.pressed('shoot')
-     if atom.input.mouse.x > 700 and atom.input.mouse.y > 500
-       @toggleMute()
-     else
-       @startGame()
+class Game extends atom.Game
+  constructor: ->
+    super()
+    @screen = new AttractScreen @
+  enter: (screen) ->
+    @nextScreen = screen
+  update: (dt) ->
+    if @nextScreen?
+      @screen.exit?()
+      @screen = @nextScreen
+      @nextScreen = null
+      @screen.enter?()
+    @screen.update dt
+  draw: ->
+    @screen.draw()
 
-  drawMenu: ->
-    # 209 10, - 387, - 47
-    ctx.fillStyle = 'rgb(215,232,148)'
-    ctx.fillRect -400, -300, 800, 600
-
-    ctx.textAlign = 'center'
-    ctx.fillStyle = 'rgb(32,70,49)'
-    ctx.save()
-    ctx.scale 1, -1
-    ctx.font = '60px KongtextRegular'
-    ctx.fillText 'Tanks a lot!', 0, -80, 600
-    ctx.font = '20px KongtextRegular'
-    ctx.fillText 'Press space to start', 0, 20, 600
-
-    if !muted
-      ctx.drawImage spritesheet, 94*2, 99*2, 20, 20, 360, 260, 20, 20
-    else
-      ctx.drawImage spritesheet, 81*2, 99*2, 20, 20, 360, 260, 20, 20
-
-    ctx.drawImage spritesheet, 209*2, 10*2, 179*2, 38*2, -178, 130, 179*2, 38*2
-
-    ctx.restore()
-
-   
 atom.input.bind atom.key.LEFT_ARROW, 'left'
 atom.input.bind atom.key.RIGHT_ARROW, 'right'
 atom.input.bind atom.key.UP_ARROW, 'up'
