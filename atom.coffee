@@ -101,7 +101,7 @@ atom.canvas.onmouseup = atom.input.onmouseup.bind(atom.input)
 atom.canvas.onmousewheel = atom.input.onmousewheel.bind(atom.input)
 atom.canvas.oncontextmenu = atom.input.oncontextmenu.bind(atom.input)
 
-atom.audioContext = new webkitAudioContext?()
+atom.audioContext = new AudioContext?()
 
 atom.loadSound = (url, callback) ->
   return callback 'No audio support' unless atom.audioContext
@@ -117,6 +117,9 @@ atom.loadSound = (url, callback) ->
       callback null, buffer
     , (error) ->
       callback error
+  
+  request.onerror = (e) ->
+    callback 'error loading resource'
 
   try
     request.send()

@@ -6,8 +6,6 @@ ctx.translate 400, 300
 ctx.scale 1, -1
 
 
-if /Windows.*Chrome\/16/.test navigator.userAgent
-  canvas.style.borderRadius = 0
 audioCtx = atom.audioContext
 
 id = 0
@@ -73,7 +71,7 @@ for s, url of sfx
       sounds[s] = buffer if buffer
       didLoad()
 
-mixer = audioCtx?.createGainNode()
+mixer = audioCtx?.createGain()
 mixer?.connect audioCtx.destination
 
 
