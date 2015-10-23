@@ -15,10 +15,6 @@ ctx.translate(400, 300);
 
 ctx.scale(1, -1);
 
-if (/Windows.*Chrome\/16/.test(navigator.userAgent)) {
-  canvas.style.borderRadius = 0;
-}
-
 audioCtx = atom.audioContext;
 
 id = 0;
@@ -125,7 +121,7 @@ for (s in sfx) {
   fn(s, url);
 }
 
-mixer = audioCtx != null ? audioCtx.createGainNode() : void 0;
+mixer = audioCtx != null ? audioCtx.createGain() : void 0;
 
 if (mixer != null) {
   mixer.connect(audioCtx.destination);
