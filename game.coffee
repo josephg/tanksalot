@@ -80,7 +80,7 @@ play = (name, time) ->
   source = audioCtx.createBufferSource()
   source.buffer = sounds[name]
   source.connect mixer
-  source.noteOn time ? 0
+  source.start time ? 0
   source
 
 toggleMute = ->
