@@ -135,7 +135,7 @@ play = function(name, time) {
   source = audioCtx.createBufferSource();
   source.buffer = sounds[name];
   source.connect(mixer);
-  source.noteOn(time != null ? time : 0);
+  source.start(time != null ? time : 0);
   return source;
 };
 
